@@ -1,27 +1,72 @@
-broker:
-  image: 'prologic/mosquitto:latest'
-  ports:
-    - '1883:1883'
-database:
-  image: 'tutum/mongodb:latest'
-  environment:
-    - MONGODB_PASS={{** CHANGE ME **}}
+version: '2'
+services:
+#database:
+#  image: 'tutum/mongodb:latest'
+#  environment:
+#    - MONGODB_PASS={{** CHANGE ME **}}
 
 # Uncomment if you want to expose the MongoDB port directly
-# If you're using the API interface (highly recommended) then you can 
-# safely leave this commented out 
+# If you're using the API interface (highly recommended) then you can
+# safely leave this commented out
 #  ports:
 #    - '27017:27017'
 
-nightscout:
-  image: 'nightscout/cgm-remote-monitor-development:latest'
-  environment:
-    - API_SECRET={{** CHANGE ME **}}
-    - 'MONGO_CONNECTION=mongodb://admin:{{** CHANGE ME **}}@database/admin'
-    - 'MQTT_MONITOR=mqtt://{{** CHANGE ME **}}@broker'
-    - PORT=1337
-  links:
-    - broker
-    - database
-  ports:
-    - '1337:1337'
+  nightscout:
+    image: 'nightscout/cgm-remote-monitor-development:latest'
+    restart: always
+    environment:
+#    - API_SECRET={{** CHANGE ME **}}
+#    - 'MONGO_CONNECTION=mongodb://admin:{{** CHANGE ME **}}@database/admin'
+      - MONGO_CONNECTION=${MONGO_CONNECTION}
+      - PORT=1337
+      - API_SECRET=${API_SECRET}
+      - DISPLAY_UNITS=${DISPLAY_UNITS}
+      - ENABLE=${ENABLE}
+      - MAKER_KEY=${MAKER_KEY}
+      - BRIDGE_SERVER=${BRIDGE_SERVER}
+      - BRIDGE_USER_NAME=${BRIDGE_USER_NAME}
+      - BRIDGE_PASSWORD=${BRIDGE_PASSWORD}
+      - PUSHOVER_API_TOKEN=${PUSHOVER_API_TOKEN}
+      - PUSHOVER_USER_KEY=${PUSHOVER_USER_KEY}
+      - VIRTUAL_HOST=cgm.prahlads.space
+      - LETSENCRYPT_HOST=cgm.prahlads.space
+      - LETSENCRYPT_EMAIL=josh@magikcraft.io
+#   links:
+#     - broker
+#     - database
+#  ports:
+#    - '1337:1337'
+
+# This nginx proxy has basic authentication
+#   nginx:
+#     image: "beevelop/nginx-basic-auth"
+#     restart: always
+#     ports:
+#       - "8080:443"
+#     depends_on:
+#       - nightscout
+#     environment:
+#       - PORT=80
+#       - FORWARD_PORT=1337
+#       - FORWARD_HOST=nightscout
+#       - HTPASSWD=${HTPASSWD}
+
+# This nginx proxy uses letsencrypt for SSL
+  nginx-proxy:
+    container_name: nginx
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/etc/nginx/vhost.d"
+      - "/usr/share/nginx/html"
+      - "/var/run/docker.sock:/tmp/docker.sock:ro"
+      - "/home/ubuntu/certs:/etc/nginx/certs"
+
+  letsencrypt-nginx-proxy-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    volumes_from:
+      - "nginx-proxy"
